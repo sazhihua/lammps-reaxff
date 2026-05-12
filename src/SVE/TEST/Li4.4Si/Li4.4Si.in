@@ -1,0 +1,39 @@
+# REAXFF simulation for Li4.4Si system
+
+units           real
+atom_style      charge
+boundary        p p p
+#newton          on
+
+read_data       Li4.4Si.data
+
+# Define masses according to atom types (1: Li, 2: Si)
+# mass          1 6.941
+# mass          2 28.085
+
+pair_style      reaxff NULL safezone 1.4
+pair_coeff      * * ffield.LiSiC Li Si
+
+fix             2 all qeq/reaxff 1 0.0 10.0 1.0e-6 reaxff
+
+neighbor        2.0 bin
+neigh_modify    delay 0 every 1 check yes
+
+thermo          10
+minimize        1.0e-6 1.0e-8 1000 10000
+reset_timestep  0
+
+variable        T equal 600          # Target temperature (K)
+variable        tdamp equal 25.0     # Nose-Hoover thermostat damping (fs)
+variable        dt equal 0.25        # Time step (fs)
+
+timestep        ${dt}
+
+fix             1 all nvt temp ${T} ${T} ${tdamp}
+
+thermo          100
+thermo_style    custom step temp pe ke press
+
+dump            1 all custom 1000 dump.li4.4si.lammpstrj id type x y z q
+
+run             4000000 # 1ns

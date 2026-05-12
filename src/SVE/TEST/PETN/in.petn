@@ -1,0 +1,118 @@
+# ReaxFF benchmark: simulation of PETN crystal, lattice version
+
+units           real
+atom_style      charge
+
+variable a equal 9.491065
+variable c equal 6.991230
+
+lattice custom 1.0 &
+    a1 $a 0.0 0.0 &
+    a2 0.0 $a 0.0 &
+    a3 0.0 0.0 $c &
+    basis 0.182521 0.487828 0.127638 &
+    basis 0.312921 0.441747 0.266747 &
+    basis 0.144687 0.398050 0.013786 &
+    basis 0.139182 0.601373 0.157010 &
+    basis 0.303933 0.621287 0.474562 &
+    basis 0.403325 0.659927 0.311672 &
+    basis 0.622646 0.452161 0.363391 &
+    basis 0.814080 0.512317 0.134593 &
+    basis 0.690577 0.569643 0.273342 &
+    basis 0.856203 0.594855 0.015418 &
+    basis 0.850339 0.389578 0.148615 &
+    basis 0.687659 0.370246 0.441160 &
+    basis 0.579567 0.366207 0.270994 &
+    basis 0.453601 0.386015 0.625537 &
+    basis 0.515399 0.188591 0.854705 &
+    basis 0.567745 0.322483 0.735582 &
+    basis 0.601548 0.139078 0.961683 &
+    basis 0.396854 0.148956 0.827495 &
+    basis 0.406658 0.295276 0.532642 &
+    basis 0.348069 0.418833 0.688184 &
+    basis 0.550496 0.623663 0.626177 &
+    basis 0.489305 0.810923 0.872650 &
+    basis 0.436921 0.700236 0.715040 &
+    basis 0.409168 0.840969 0.002775 &
+    basis 0.609696 0.845543 0.857742 &
+    basis 0.622272 0.696616 0.537345 &
+    basis 0.640378 0.582775 0.703150 &
+    basis 0.374323 0.557206 0.372314 &
+    basis 0.501257 0.504308 0.492910 &
+    basis 0.119296 0.054819 0.130267 &
+    basis 0.300241 0.977611 0.381475 &
+    basis 0.177229 0.938662 0.228835 &
+    basis 0.331190 0.885512 0.492496 &
+    basis 0.349569 0.095570 0.353120 &
+    basis 0.194466 0.117623 0.034970 &
+    basis 0.086793 0.155045 0.202568 &
+    basis 0.881524 0.940901 0.119095 &
+    basis 0.703861 0.009814 0.381049 &
+    basis 0.821427 0.054216 0.222220 &
+    basis 0.678501 0.098298 0.496163 &
+    basis 0.657359 0.891946 0.350576 &
+    basis 0.809935 0.878284 0.019530 &
+    basis 0.919683 0.833788 0.177797 &
+    basis 0.058381 0.878044 0.872608 &
+    basis 0.987635 0.704960 0.615463 &
+    basis 0.941987 0.824820 0.768889 &
+    basis 0.898353 0.676451 0.503813 &
+    basis 0.103621 0.656866 0.643562 &
+    basis 0.129476 0.810681 0.969334 &
+    basis 0.149835 0.934975 0.797422 &
+    basis 0.942041 0.124352 0.878212 &
+    basis 0.013489 0.299432 0.619277 &
+    basis 0.059518 0.186788 0.787648 &
+    basis 0.099359 0.323986 0.501716 &
+    basis 0.896289 0.345370 0.645492 &
+    basis 0.880821 0.203710 0.966640 &
+    basis 0.844838 0.087360 0.796426 &
+    basis 0.999561 0.001305 0.999940 &
+    # --- basis end ---
+
+variable x index 1
+variable y index 1
+variable z index 1
+region sim_box block 0 $x 0 $y 0 $z
+create_box 4 sim_box
+
+create_atoms 1 box &
+    basis 1 4     basis 2 3     basis 3 3     basis 4 3 &
+    basis 5 2     basis 6 2     basis 7 1     basis 8 4 &
+    basis 9 3     basis 10 3     basis 11 3     basis 12 2 &
+    basis 13 2     basis 14 1     basis 15 4     basis 16 3 &
+    basis 17 3     basis 18 3     basis 19 2     basis 20 2 &
+    basis 21 1     basis 22 4     basis 23 3     basis 24 3 &
+    basis 25 3     basis 26 2     basis 27 2     basis 28 1 &
+    basis 29 1     basis 30 1     basis 31 4     basis 32 3 &
+    basis 33 3     basis 34 3     basis 35 2     basis 36 2 &
+    basis 37 1     basis 38 4     basis 39 3     basis 40 3 &
+    basis 41 3     basis 42 2     basis 43 2     basis 44 1 &
+    basis 45 4     basis 46 3     basis 47 3     basis 48 3 &
+    basis 49 2     basis 50 2     basis 51 1     basis 52 4 &
+    basis 53 3     basis 54 3     basis 55 3     basis 56 2 &
+    basis 57 2     basis 58 1 
+
+mass 1 12.0000
+mass 2 1.0080
+mass 3 15.9990
+mass 4 14.0000
+
+velocity        all create 300.0 9999
+
+pair_style      reaxff NULL safezone 1.4
+pair_coeff      * * ffield.reax C H O N
+
+neigh_modify    one 4000 page 100000
+
+timestep        0.1
+
+fix             1 all nve 
+fix             2 all qeq/reaxff 1 0.0 10.0 1.0e-6 reaxff
+
+thermo          10
+thermo_style    custom step temp ke pe pxx pyy pzz etotal press
+
+dump            1 all custom 10 dump.PETN.lammpstrj id type x y z q
+
+run             100

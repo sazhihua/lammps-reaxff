@@ -1,0 +1,1 @@
+#define LAMMPS_VERSION "2 Apr 2025"
