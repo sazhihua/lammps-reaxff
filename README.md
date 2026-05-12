@@ -32,8 +32,8 @@ The optional keywords `safezone`, `mincap`, and `minhbonds` are used to scale in
 *(Note: The first parameter `<control_file>` can be a path or `NULL` depending on your potential setup.)*
 * **QEq Solver (`cg_algo`):**
 In the `fix qeq/reaxff` command (e.g., `fix 2 all qeq/reaxff ... cg_algo 1`), you can specify the CG implementation:
-* `0`: Original CG implementation.
-* `1`: Original CG optimized with OpenMP.
+* `0`: Optimized CG implementation, recommended for single-thread execution.
+* `1`: Optimized CG implementation with OpenMP support, recommended for multi-thread execution.
 * `2`: Pipelined CG with OpenMP (asynchronous overlapping of communication and computation).
 * `3`: Pipelined CG with OpenMP and **Weight-Based Dynamic Re-balancing**. Thread 0 manages MPI communication and dynamically assists in SpMV computation based on workload weights to eliminate idle time.
 
