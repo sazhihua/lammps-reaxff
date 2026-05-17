@@ -61,12 +61,22 @@ static const char cite_pair_reax_c[] =
   " number =  {4--5},\n"
   " pages =   {245--259}\n"
   "}\n\n";
+static const char cite_pair_reaxff_sve[] =
+  "pair reaxff/sve command: https://github.com/sazhihua/lammps-reaxff\n\n"
+  "@misc{sa2026reaxff,\n"
+  " title        = {Redesign ReaxFF on ARM: Enabling High-Performance Billion-Atom Reactive Molecular Dynamics},\n"
+  " year         = {2026},\n"
+  " howpublished = {\\url{https://github.com/sazhihua/lammps-reaxff}},\n"
+  "}\n\n";
 
 /* ---------------------------------------------------------------------- */
 
 PairReaxFFSVE::PairReaxFFSVE(LAMMPS *lmp) : Pair(lmp)
 {
-  if (lmp->citeme) lmp->citeme->add(cite_pair_reax_c);
+  if (lmp->citeme) {
+    lmp->citeme->add(cite_pair_reax_c);
+    lmp->citeme->add(cite_pair_reaxff_sve);
+  }
 
   single_enable = 0;
   restartinfo = 0;
