@@ -61,3 +61,15 @@ The simulation results and performance data will be displayed in the terminal an
 `Performance: 0.497 ns/day, 48.272 hours/ns, 92.070 timesteps/s, 35.355 katom-step/s`
 
 > **Note:** The compilation flags, MPI/OpenMP configurations, and paths provided above are for demonstration purposes only. Please adjust them according to your specific hardware environment and research requirements. For more details on parameter settings and command usage, please refer to the [LAMMPS ReaxFF Documentation](https://docs.lammps.org/pair_reaxff.html).
+
+### Citation
+
+If you use this project in your research, please cite:
+
+```bibtex
+@misc{sa2026reaxff,
+  title        = {Redesign ReaxFF on ARM: Enabling High-Performance Billion-Atom Reactive Molecular Dynamics},
+  year         = {2026},
+  howpublished = {\url{https://github.com/sazhihua/lammps-reaxff}},
+}
+```
