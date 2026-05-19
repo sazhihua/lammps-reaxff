@@ -1,6 +1,6 @@
 simulation_name		TATB_example ! output files will carry this name + their specific ext
 
-tabulate_long_range	10000 ! denotes the granularity of long range tabulation, 0 means no tabulation
+tabulate_long_range	0 ! denotes the granularity of long range tabulation, 0 means no tabulation
 energy_update_freq 	1 
 
 nbrhood_cutoff		4.5  ! near neighbors cutoff for bond calculations in A
