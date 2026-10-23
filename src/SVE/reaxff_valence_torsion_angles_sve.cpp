@@ -28,6 +28,8 @@
 #include "reaxff_api_sve.h"
 
 #include <cmath>
+#include <unordered_map>
+#include <vector>
 #include "pair.h"
 #include "error.h"
 #include <omp.h> 
@@ -45,6 +47,7 @@ void Valence_and_Torsion_Angles(reax_system *system, control_params *control, si
   const double p_tor4 = system->reax_param.gp.l[25];
   const double p_cot2 = system->reax_param.gp.l[27];
   reax_list *bonds = (*lists) + BONDS;
+  std::vector<std::unordered_map<int, double>> Cdbo_reduction(nthr > 1 ? nthr : 0);
 
   double total_e_ang = 0.0;
   double total_e_pen = 0.0;
@@ -643,7 +646,10 @@ void Valence_and_Torsion_Angles(reax_system *system, control_params *control, si
                 my_C[k] += CEtors3;
                 bo_ij->Cdbo += (CEtors4 + CEconj1);
                 bo_jk->Cdbo += (CEtors5 + CEconj2);
-                bo_kl->Cdbo += (CEtors6 + CEconj3);
+                if (nthr == 1)
+                  bo_kl->Cdbo += (CEtors6 + CEconj3);
+                else
+                  Cdbo_reduction[ithr][pl] += (CEtors6 + CEconj3);
 
                 /* dcos_theta_ijk */
                 // rvec_ScaledAdd(workspace->f[i], CEtors7 + CEconj4, p_ijk_dcos_dk);
@@ -692,6 +698,9 @@ void Valence_and_Torsion_Angles(reax_system *system, control_params *control, si
 
   }//for-j
 }// end parallel region   
+  for (const auto &thread_Cdbo : Cdbo_reduction)
+    for (const auto &entry : thread_Cdbo)
+      bonds->select.bond_list[entry.first].bo_data.Cdbo += entry.second;
   data->my_en.e_ang += total_e_ang; 
   data->my_en.e_pen += total_e_pen; 
   data->my_en.e_coa += total_e_coa; 

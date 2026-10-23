@@ -82,6 +82,7 @@ class PairReaxFFSVE : public Pair {
   void read_reax_forces(int);
 
   int nmax;
+  int workspace_nmax, workspace_nlocal, workspace_nthreads;
   void FindBond();
   double memory_usage() override;
 

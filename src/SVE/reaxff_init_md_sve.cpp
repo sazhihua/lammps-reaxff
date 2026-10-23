@@ -119,7 +119,7 @@ namespace ReaxFFSVE {
 
   static void Init_Lists(reax_system *system, control_params *control, reax_list **lists)
   {
-    int i, total_hbonds, total_bonds, bond_cap, num_3body, cap_3body, Htop;
+    int i, total_bonds, bond_cap, num_3body, Htop;
     int *hb_top, *bond_top;
 
     int mincap = system->mincap;
@@ -131,25 +131,15 @@ namespace ReaxFFSVE {
     Estimate_Storages(system, control, lists,
                       &Htop, hb_top, bond_top, &num_3body);
 
-    if (control->hbond_cut > 0) {
-      /* init H indexes */
-      total_hbonds = 0;
-      for (i = 0; i < system->n; ++i) {
-        system->my_atoms[i].num_hbonds = hb_top[i];
-        total_hbonds += hb_top[i];
-      }
-      total_hbonds = (int)(MAX(total_hbonds*saferzone,mincap*system->minhbonds));
-
-      Make_List(system->Hcap, total_hbonds, TYP_HBOND,*lists+HBONDS);
-      (*lists+HBONDS)->error_ptr = system->error_ptr;
-    }
+    // Hydrogen_Bonds_nohlist evaluates candidates from listfull directly.
+    // Do not allocate the obsolete hydrogen-bond list.
 
     total_bonds = 0;
     for (i = 0; i < system->N; ++i) {
       system->my_atoms[i].num_bonds = bond_top[i];
       total_bonds += bond_top[i];
     }
-    bond_cap = (int)(MAX(total_bonds*safezone, mincap*MIN_BONDS));
+    bond_cap = (int)(MAX(total_bonds*safezone, mincap*8));
 
     Make_List(system->total_cap, bond_cap, TYP_BOND,*lists+BONDS);
     (*lists+BONDS)->error_ptr = system->error_ptr;
@@ -175,4 +165,3 @@ namespace ReaxFFSVE {
       Init_Lookup_Tables(system,control,workspace,world);
   }
 }
-

@@ -102,6 +102,7 @@ namespace ReaxFFSVE {
     sfree(workspace->Clp);
     sfree(workspace->vlpex);
     sfree(workspace->bond_mark);
+    workspace->bond_mark = nullptr;
 
     /* force related storage */
     sfree(workspace->f);
@@ -119,12 +120,12 @@ namespace ReaxFFSVE {
 
   void Allocate_Workspace(control_params *control, storage *workspace, int total_cap)
   {
-    int total_real, total_rvec;
+    rc_bigint total_real, total_rvec;
     auto error = control->error_ptr;
 
     workspace->allocated = 1;
-    total_real = total_cap * sizeof(double);
-    total_rvec = total_cap * sizeof(rvec);
+    total_real = (rc_bigint)total_cap * sizeof(double);
+    total_rvec = (rc_bigint)total_cap * sizeof(rvec);
 
     /* bond order related storage  */
     workspace->total_bond_order = (double*) smalloc(error, total_real, "total_bo");
@@ -143,7 +144,10 @@ namespace ReaxFFSVE {
     workspace->nlp_temp = (double*) smalloc(error, total_real, "nlp_temp");
     workspace->Clp = (double*) smalloc(error, total_real, "Clp");
     workspace->vlpex = (double*) smalloc(error, total_real, "vlpex");
-    // workspace->bond_mark = (int*) scalloc(error, total_cap, sizeof(int), "bond_mark");
+    // PreAllocate_Space supplies the initial buffer. Reallocation must restore
+    // it after DeAllocate_Workspace freed the previous topology marks.
+    if (!workspace->bond_mark)
+      workspace->bond_mark = (int*) scalloc(error, total_cap, sizeof(int), "bond_mark");
 
     /* force related storage */
     workspace->f = (rvec*) scalloc(error, total_cap, sizeof(rvec), "f");
@@ -208,7 +212,7 @@ namespace ReaxFFSVE {
       *est_3body += SQR(system->my_atoms[i].num_bonds);
       total_bonds_big += system->my_atoms[i].num_bonds;
     }
-    total_bonds_big = (LAMMPS_NS::bigint)(MAX(total_bonds_big * safezone, mincap*MIN_BONDS));
+    total_bonds_big = (LAMMPS_NS::bigint)(MAX(total_bonds_big * safezone, mincap*8));
 
     auto error = system->error_ptr;
     if (total_bonds_big > MAXSMALLINT)
@@ -272,13 +276,16 @@ namespace ReaxFFSVE {
 
       newsize = static_cast<int>
         (MAX(wsr->num_far*safezone, mincap*REAX_MIN_NBRS));
+      // Initialize clears num_far. An immediate workspace resize must not
+      // discard the capacity estimated before the first force evaluation.
+      newsize = MAX(newsize, far_nbrs->num_intrs);
 
       Reallocate_Neighbor_List(far_nbrs, system->total_cap, newsize);
       wsr->num_far = 0;
     }
 
     /* hydrogen bonds list */
-    if (control->hbond_cut > 0) {
+    if (((*lists)+HBONDS)->allocated && control->hbond_cut > 0) {
       Hflag = 0;
       if (system->numH >= DANGER_ZONE * system->Hcap) {
         Hflag = 1;
@@ -327,4 +334,3 @@ namespace ReaxFFSVE {
     // }
   }
 }
-

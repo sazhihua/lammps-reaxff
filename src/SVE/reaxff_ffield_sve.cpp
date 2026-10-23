@@ -627,6 +627,14 @@ namespace ReaxFFSVE {
         auto sbp_i = &(reax->sbp[i]);
         auto sbp_j = &(reax->sbp[j]);
         auto twbp = &(reax->tbp[i][j]);
+        twbp->r_bocut = control->bond_cut;
+        if ((sbp_i->r_s > 0.0 && sbp_j->r_s > 0.0 &&
+             !(twbp->r_s > 0.0 && twbp->p_bo1 < 0.0 && twbp->p_bo2 > 0.0)) ||
+            (sbp_i->r_pi > 0.0 && sbp_j->r_pi > 0.0 &&
+             !(twbp->r_p > 0.0 && twbp->p_bo3 < 0.0 && twbp->p_bo4 > 0.0)) ||
+            (sbp_i->r_pi_pi > 0.0 && sbp_j->r_pi_pi > 0.0 &&
+             !(twbp->r_pp > 0.0 && twbp->p_bo5 < 0.0 && twbp->p_bo6 > 0.0)))
+          continue;
         auto boR = [&](double d){
           double BO_s, BO_pi, BO_pi2, C12, C34, C56;
           double bo_cut = control->bo_cut;
@@ -648,14 +656,21 @@ namespace ReaxFFSVE {
           /* Initially BO values are the uncorrected ones, page 1 */
           return BO_s + BO_pi + BO_pi2;
         };
-        double rmin = 1, rmax = control->bond_cut;
-        do {
-          double rmid = (rmin+rmax)*0.5;
-          double midbo = boR(rmid);
-          if(midbo > control->bo_cut) rmin = rmid;
+        double rmin = 0.0, rmax = control->bond_cut;
+        const double bo_min = boR(rmin), bo_max = boR(rmax);
+        if (!std::isfinite(bo_min) || !std::isfinite(bo_max) ||
+            !(bo_min > control->bo_cut && bo_max < control->bo_cut)) continue;
+        int iter = 0;
+        while (rmax - rmin > 1.0e-8 && iter < 200) {
+          const double rmid = rmin + 0.5 * (rmax - rmin);
+          if (!(rmid > rmin && rmid < rmax)) break;
+          const double midbo = boR(rmid);
+          if (!std::isfinite(midbo)) break;
+          if (midbo > control->bo_cut) rmin = rmid;
           else rmax = rmid;
-        } while (rmax - rmin > 1e-8);
-        twbp->r_bocut = rmax;
+          ++iter;
+        }
+        if (rmax - rmin <= 1.0e-8) twbp->r_bocut = rmax;
       }
     }
     // GPTLstop("bop preprocess");

@@ -90,6 +90,8 @@ NPairClusterBinSVE<HALF, NEWTON, TRI, SIZE, ATOMONLY>::NPairClusterBinSVE(LAMMPS
   jnum_cluster = nullptr;
   neigh_buffer = nullptr;
   firstneigh_alloc = 0;
+  cluster_stride = 0;
+  cluster_buffer_entries = 0;
 }
 
 template<int HALF, int NEWTON, int TRI, int SIZE, int ATOMONLY>
@@ -166,13 +168,25 @@ void NPairClusterBinSVE<HALF, NEWTON, TRI, SIZE, ATOMONLY>::build_normal(NeighLi
   h.build(std::max(std::max(mbinx, mbiny), mbinz));
 
   int *glist, *gbinlo, *gbinhi;
- 	int safezone = 8;
   memory->create(glist, nlocal + nghost, "NPairClusterBinSVE:glist");
   memory->create(gbinlo, mbins, "NPairClusterBinSVE:gbinlo");
   memory->create(gbinhi, mbins, "NPairClusterBinSVE:gbinhi");
-  memory->grow(jnum_cluster, nlocal + nghost + safezone, "NPairClusterBinSVE:jnum");
-  firstneigh_cluster = (decltype(firstneigh_cluster))memory->srealloc((void*)firstneigh_cluster, nlocal + safezone, "NPairClusterBinSVE:firstneigh_cluster");
-  memory->grow(neigh_buffer, (nlocal + safezone) * neighbor->oneatom, "NPairClusterBinSVE:neigh_buffer");
+  // One row per I cluster, not per atom. Retain capacity across rebuilds.
+  const int needed_clusters = (nlocal + CLUSTERSIZE - 1) / CLUSTERSIZE + 1;
+  if (needed_clusters > firstneigh_alloc) {
+    firstneigh_alloc = needed_clusters;
+    memory->grow(jnum_cluster, firstneigh_alloc, "NPairClusterBinSVE:jnum");
+    firstneigh_cluster = (decltype(firstneigh_cluster))memory->srealloc(
+      firstneigh_cluster, (bigint)firstneigh_alloc*sizeof(*firstneigh_cluster),
+      "NPairClusterBinSVE:firstneigh_cluster");
+  }
+  cluster_stride = std::max(cluster_stride, (neighbor->oneatom + 3) / 4 * 4);
+  const bigint needed_entries = (bigint)firstneigh_alloc * cluster_stride;
+  if (needed_entries > cluster_buffer_entries) {
+    cluster_buffer_entries = needed_entries;
+    neigh_buffer = (decltype(neigh_buffer))memory->srealloc(neigh_buffer,
+      cluster_buffer_entries*sizeof(*neigh_buffer), "NPairClusterBinSVE:neigh_buffer");
+  }
 
   for (int iibin = 0; iibin < mbins - 1; iibin ++) {
     gbinlo[iibin] = gnum;
@@ -185,7 +199,9 @@ void NPairClusterBinSVE<HALF, NEWTON, TRI, SIZE, ATOMONLY>::build_normal(NeighLi
 
 
   int num_clusters = (inum + CLUSTERSIZE - 1) / CLUSTERSIZE;
-#pragma omp parallel
+#pragma omp parallel private(i,ii,j,jj,jh,k,n,itype,jtype,ibin,which,imol,iatom, \
+                            itag,jtag,tagprev,xtmp,ytmp,ztmp,delx,dely,delz,rsq, \
+                            radsum,cut,cutsq,jlo,jhi)
 {
   std::vector<int> jset(nlocal + nghost, -1);
   std::vector<int> jloc(nlocal + nghost, -1);
@@ -194,11 +210,13 @@ void NPairClusterBinSVE<HALF, NEWTON, TRI, SIZE, ATOMONLY>::build_normal(NeighLi
   for (ic = 0; ic < num_clusters; ic++) {
     int iis = ic * CLUSTERSIZE;
     int iie = std::min(iis + CLUSTERSIZE, inum);
-    firstneigh_cluster[ic] = neigh_buffer + neighbor->oneatom * ic;
+    firstneigh_cluster[ic] = neigh_buffer + (bigint)cluster_stride * ic;
     ClusterNeighEntry<ATOMONLY> *jlist_cluster = firstneigh_cluster[ic];
     int nc = 0;
     auto append_cluster = [&](int ii, int j, int special){
       if (jset[j] != ic) {
+        if (nc >= neighbor->oneatom)
+          error->one(FLERR, "Neighbor list overflow, boost neigh_modify one");
         jset[j] = ic;
         ClusterNeighEntry<ATOMONLY> &ent = jlist_cluster[nc];
         ent.init(j);
@@ -382,7 +400,7 @@ void NPairClusterBinSVE<HALF, NEWTON, TRI, SIZE, ATOMONLY>::build_normal(NeighLi
       numneigh[i] = n;
     }
     jnum_cluster[ic] = nc;
-    if (nc >= neighbor->oneatom) {
+    if (nc > neighbor->oneatom) {
       error->one(FLERR, "Neighbor list overflow, boost neigh_modify one");
     }
     while (nc & 3) {
@@ -418,4 +436,3 @@ template class NPairClusterBinSVE<1,0,0,1,1>;
 template class NPairClusterBinSVE<1,1,0,1,1>;
 template class NPairClusterBinSVE<1,1,1,1,1>;
 }
-

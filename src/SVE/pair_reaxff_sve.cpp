@@ -41,6 +41,7 @@
 #include "suffix.h"
 
 #include <cmath>
+#include <algorithm>
 #include <cstring>
 #include <omp.h>
 // #include "gptl.h"
@@ -127,6 +128,7 @@ PairReaxFFSVE::PairReaxFFSVE(LAMMPS *lmp) : Pair(lmp)
   setup_flag = 0;
   fixspecies_flag = 0;
   nmax = 0;
+  workspace_nmax = workspace_nlocal = workspace_nthreads = 0;
   list_blocking_flag = 0;
 
   api->system->nmax = 0;
@@ -446,7 +448,8 @@ void PairReaxFFSVE::setup()
   oldN = api->system->N;
 
   int nthr = omp_get_max_threads();
-  if (api->system->N > nmax) {
+  if (api->system->N > workspace_nmax || api->system->n > workspace_nlocal ||
+      nthr != workspace_nthreads) {
     memory->destroy(ghost_list);
     memory->destroy(nbr_counts);
     memory->destroy(ghost_atoms);
@@ -456,16 +459,19 @@ void PairReaxFFSVE::setup()
     memory->destroy(api->workspace->forceTmp);
     memory->destroy(api->workspace->bond_count);
     memory->destroy(api->workspace->bond_start);
-    // Don't update nmax here. It is updated at end of compute().
-    memory->create(ghost_list, api->system->N, "ghost_list"); // N
-    memory->create(nbr_counts, api->system->n, "nbr_counts"); // tmp n, in fact, need inum
-    memory->create(ghost_atoms, api->system->N, "ghost_atoms"); // N
-    memory->create(prefix_sum, api->system->n + 1, "prefix_sum"); // tmp n, in fact, need inum
-    memory->create(ghost_prefix, api->system->N + 1, "ghost_prefix"); // N
-    memory->create(api->workspace->CdDeltaTmp, nthr, api->system->N, "CdDeltaTmp");
-    memory->create(api->workspace->forceTmp, nthr, api->system->N, 3, "forceTmp");
-    memory->create(api->workspace->bond_count, api->system->N, "bond_count"); // N
-    memory->create(api->workspace->bond_start, api->system->N, "bond_start"); // N
+    // nmax belongs to optional species output. Keep independent workspace capacities.
+    workspace_nmax = std::max(workspace_nmax,api->system->N);
+    workspace_nlocal = std::max(workspace_nlocal,api->system->n);
+    workspace_nthreads = nthr;
+    memory->create(ghost_list, workspace_nmax, "ghost_list");
+    memory->create(nbr_counts, workspace_nlocal, "nbr_counts");
+    memory->create(ghost_atoms, workspace_nmax, "ghost_atoms");
+    memory->create(prefix_sum, workspace_nlocal + 1, "prefix_sum");
+    memory->create(ghost_prefix, workspace_nmax + 1, "ghost_prefix");
+    memory->create(api->workspace->CdDeltaTmp, nthr, workspace_nmax, "CdDeltaTmp");
+    memory->create(api->workspace->forceTmp, nthr, workspace_nmax, 3, "forceTmp");
+    memory->create(api->workspace->bond_count, workspace_nmax, "bond_count");
+    memory->create(api->workspace->bond_start, workspace_nmax, "bond_start");
   }
 
   if (setup_flag == 0) {
@@ -877,6 +883,8 @@ if (nthr == 1) { /* SINGLE-THREAD */
       // if (d_sqr <= (cutoff_sqr)  /* && (j > i)*/ ) 
       {
         double rij = sqrt(d_sqr);
+        if (num_nbrs >= far_nbrs->num_intrs)
+          error->one(FLERR,"SVE far-neighbor capacity exceeded before write; increase safezone");
         set_far_nbr(&far_list[num_nbrs], j, rij, dvec);
         ++num_nbrs;
         if (api->workspace->bond_mark[j] > 1) {
@@ -913,6 +921,8 @@ if (nthr == 1) { /* SINGLE-THREAD */
       // if (d_sqr <= (cutoff_sqr)  /* && (j > i)*/ ) 
       {
         double rij = sqrt(d_sqr);
+        if (num_nbrs >= far_nbrs->num_intrs)
+          error->one(FLERR,"SVE far-neighbor capacity exceeded before write; increase safezone");
         set_far_nbr(&far_list[num_nbrs], j, rij, dvec);
         ++num_nbrs;
         if (api->workspace->bond_mark[j] > api->workspace->bond_mark[i]+1) {
@@ -971,6 +981,8 @@ else /* MULTI-THREAD */ {
     prefix_sum[i] = prefix_sum[i-1] + nbr_counts[i-1];
   }
   num_nbrs = prefix_sum[listfull->inum];
+  if (num_nbrs > far_nbrs->num_intrs)
+    error->one(FLERR,"SVE far-neighbor capacity exceeded before parallel write; increase safezone");
 
   nghost_list = 0;
   for (int j = 0; j < api->system->N; j++) {
@@ -1098,6 +1110,8 @@ else /* MULTI-THREAD */ {
       far_nbrs->end_index[i] = offset;
     }
     num_nbrs = offset;
+    if (num_nbrs > far_nbrs->num_intrs)
+      error->one(FLERR,"SVE far-neighbor capacity exceeded before ghost write; increase safezone");
 
     // Second pass: fill far_list (no races, each i has its block)
     #pragma omp parallel for

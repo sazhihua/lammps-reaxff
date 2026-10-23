@@ -348,16 +348,19 @@ void FixQEqReaxFFSVE::allocate_storage()
   memory->create(r,size,"qeq:r");
   memory->create(d,size,"qeq:d");
 
-  // pipeline CG
-  memory->create(m,size,"qeq:m");
-  memory->create(u,size,"qeq:u");
-  memory->create(v,size,"qeq:v");
-  memory->create(w,size,"qeq:w");
-  memory->create(z,size,"qeq:z");
-  memory->create(p_s,size,"qeq:p_s");
+  // Allocate pipelined-CG scratch only for algorithms that use it.
+  if (cg_algo >= 2) {
+    memory->create(m,size,"qeq:m");
+    memory->create(u,size,"qeq:u");
+    memory->create(v,size,"qeq:v");
+    memory->create(w,size,"qeq:w");
+    memory->create(z,size,"qeq:z");
+    memory->create(p_s,size,"qeq:p_s");
+  }
 
   // for multi-thread
-  memory->create(b_temp,omp_get_max_threads(),size,"qeq:b_temp");
+  if (cg_algo != 0)
+    memory->create(b_temp,omp_get_max_threads(),size,"qeq:b_temp");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1136,7 +1139,7 @@ int FixQEqReaxFFSVE::CG(double *b, double *x)
 int FixQEqReaxFFSVE::CG_omp(double *b, double *x)
 {
   // GPTLstart("CG");
-  int  i, j;
+  int  i;
   double tmp = 0.0, alpha, beta, b_norm;
   double sig_old, sig_new = 0.0;
 
@@ -1154,7 +1157,7 @@ int FixQEqReaxFFSVE::CG_omp(double *b, double *x)
 
   #pragma omp parallel for reduction(+:my_sum, my_dot)
   for(jj = 0; jj < nn; ++jj) {
-    j = ilist[jj];
+    const int j = ilist[jj];
     if (atom->mask[j] & groupbit) { 
       r[j] = b[j] - q[j];
       d[j] = r[j] * Hdia_inv[j]; 
@@ -1185,7 +1188,7 @@ int FixQEqReaxFFSVE::CG_omp(double *b, double *x)
 
     #pragma omp parallel for reduction(+:my_dot)
     for (jj = 0; jj < nn; ++jj) {
-      j = ilist[jj];
+      const int j = ilist[jj];
       if (atom->mask[j] & groupbit) {
         my_dot += d[j] * q[j];
       }
@@ -1200,7 +1203,7 @@ int FixQEqReaxFFSVE::CG_omp(double *b, double *x)
     my_dot = 0.0;
     #pragma omp parallel for reduction(+:my_dot)
     for (jj = 0; jj < nn; ++jj) {
-      j = ilist[jj];
+      const int j = ilist[jj];
       if (atom->mask[j] & groupbit) {
         x[j] += alpha * d[j];
         r[j] -= alpha * q[j];
@@ -1215,7 +1218,7 @@ int FixQEqReaxFFSVE::CG_omp(double *b, double *x)
 
     #pragma omp parallel for 
     for (jj = 0; jj < nn; ++jj) {
-      j = ilist[jj];
+      const int j = ilist[jj];
       if (atom->mask[j] & groupbit) {
         d[j] = p[j] + beta * d[j];
       }
@@ -1395,7 +1398,7 @@ int FixQEqReaxFFSVE::CG_omp(double *b, double *x)
 int FixQEqReaxFFSVE::pipeline_CG(double *b, double *x)
 {
   // GPTLstart("CG");
-  int  i, j, jj;
+  int  i, jj;
   double tmp, alpha, beta, b_norm;
   double sig_old, sig_new, deta, heta;
 
@@ -1414,7 +1417,7 @@ int FixQEqReaxFFSVE::pipeline_CG(double *b, double *x)
   // Initial pre-conditioning: u = M * r
   #pragma omp parallel for
   for (jj = 0; jj < nn; ++jj) {
-    j = ilist[jj];
+    const int j = ilist[jj];
     if (atom->mask[j] & groupbit) {
       u[j] = r[j] * Hdia_inv[j];
     } else {
@@ -1432,7 +1435,7 @@ int FixQEqReaxFFSVE::pipeline_CG(double *b, double *x)
 
   #pragma omp parallel for
   for (jj = 0; jj < nn; ++jj) {
-    j = ilist[jj];
+    const int j = ilist[jj];
     w[j] = q[j];                        // w = H * M * r
     if (atom->mask[j] & groupbit) {
       m[j] = q[j] * Hdia_inv[j];        // m = M * H * M * r
@@ -1451,7 +1454,7 @@ int FixQEqReaxFFSVE::pipeline_CG(double *b, double *x)
 
   #pragma omp parallel for
   for (jj = 0; jj < nn; ++jj) {
-    j = ilist[jj];
+    const int j = ilist[jj];
     p[j] = u[j];
     p_s[j] = w[j];
     v[j] = m[j];
@@ -1601,7 +1604,7 @@ int FixQEqReaxFFSVE::pipeline_CG(double *b, double *x)
 int FixQEqReaxFFSVE::pipeline_CG_weight(double *b, double *x)
 {
   // GPTLstart("CG");
-  int  i, j, jj;
+  int  i, jj;
   double tmp, alpha, beta, b_norm;
   double sig_old, sig_new, deta, heta;
 
@@ -1620,7 +1623,7 @@ int FixQEqReaxFFSVE::pipeline_CG_weight(double *b, double *x)
   // Initial pre-conditioning: u = M * r
   #pragma omp parallel for
   for (jj = 0; jj < nn; ++jj) {
-    j = ilist[jj];
+    const int j = ilist[jj];
     if (atom->mask[j] & groupbit) {
       u[j] = r[j] * Hdia_inv[j];
     } else {
@@ -1638,7 +1641,7 @@ int FixQEqReaxFFSVE::pipeline_CG_weight(double *b, double *x)
 
   #pragma omp parallel for
   for (jj = 0; jj < nn; ++jj) {
-    j = ilist[jj];
+    const int j = ilist[jj];
     w[j] = q[j];                        // w = H * M * r
     if (atom->mask[j] & groupbit) {
       m[j] = q[j] * Hdia_inv[j];        // m = M * H * M * r
@@ -1657,7 +1660,7 @@ int FixQEqReaxFFSVE::pipeline_CG_weight(double *b, double *x)
   
   #pragma omp parallel for
   for (jj = 0; jj < nn; ++jj) {
-    j = ilist[jj];
+    const int j = ilist[jj];
     p[j] = u[j];
     p_s[j] = w[j];
     v[j] = m[j];

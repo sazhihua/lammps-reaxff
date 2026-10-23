@@ -254,7 +254,7 @@ static void sort_bonds(reax_list *bonds, reax_system *system)
       bonds = *lists + BONDS;
 
       for (i = 0; i < N; ++i) {
-        system->my_atoms[i].num_bonds = MAX(Num_Entries(i,bonds)*2, MIN_BONDS);
+        system->my_atoms[i].num_bonds = MAX((int)(Num_Entries(i,bonds)*1.5 + 1), 8);
 
         if (i < N-1)
           comp = Start_Index(i+1, bonds);
@@ -269,7 +269,7 @@ static void sort_bonds(reax_list *bonds, reax_system *system)
 
 
     /* hbonds list */
-    if (numH > 0) {
+    if ((*lists + HBONDS)->allocated && numH > 0) {
       hbonds = *lists + HBONDS;
 
       for (i = 0; i < N; ++i) {
@@ -319,6 +319,8 @@ static void sort_bonds(reax_list *bonds, reax_system *system)
     btop_i = 0;
     for (i = 0; i < system->N; ++i) 
     {
+      Set_Start_Index(i, btop_i, bonds);
+      Set_End_Index(i, btop_i, bonds);
       if (workspace->bond_mark[i] > 3) continue;
       atom_i = &(system->my_atoms[i]);
       type_i  = atom_i->type;
@@ -376,6 +378,8 @@ static void sort_bonds(reax_list *bonds, reax_system *system)
         ///****************** BOP_single() *****************/
         if (nbr_pj->d <= control->bond_cut &&  BO >= bo_cut) 
         {
+          if (btop_i >= bonds->num_intrs)
+            system->error_ptr->one(FLERR,"SVE bond list capacity exceeded before write; increase safezone");
           /****** bonds i-j and j-i ******/
           ibond = &(bonds->select.bond_list[btop_i]);
           ibond->nbr = j;
@@ -451,7 +455,7 @@ static void Init_Forces_noQEq_omp(reax_system *system, control_params *control,
   // int *bond_count = (int *) malloc(sizeof(int) * N);
   int *bond_count = workspace->bond_count;
 
-#pragma omp parallel for schedule(dynamic, 64)
+#pragma omp parallel for schedule(dynamic, 64) private(j,pj,start_i,end_i,type_i,type_j)
   for (i = 0; i < N; ++i) {
     int cnt = 0;
 
@@ -530,11 +534,13 @@ static void Init_Forces_noQEq_omp(reax_system *system, control_params *control,
     bond_start[i] = bond_start[i - 1] + bond_count[i - 1];
 
   int num_bonds = bond_start[N - 1] + bond_count[N - 1];
+  if (num_bonds > bonds->num_intrs)
+    system->error_ptr->one(FLERR,"SVE bond list capacity exceeded before parallel write; increase safezone");
   workspace->realloc.num_bonds = num_bonds;
 
   /* ---------------- Pass 2: write bonds ---------------- */
 
-#pragma omp parallel for schedule(dynamic, 64)
+#pragma omp parallel for schedule(dynamic, 64) private(j,pj,start_i,end_i,type_i,type_j)
   for (i = 0; i < N; ++i) {
     if (bond_count[i] == 0) {
       Set_Start_Index(i, bond_start[i], bonds);
@@ -864,7 +870,7 @@ static void Init_Forces_noQEq_Hbond(reax_system *system, control_params *control
       hb_top[i] = (int)(MAX(hb_top[i] * saferzone, system->minhbonds));
 
     for (i = 0; i < system->N; ++i) {
-      bond_top[i] = MAX(bond_top[i] * 2, MIN_BONDS);
+      bond_top[i] = MAX((int)(bond_top[i] * 1.5 + 1), 8);
     }
     // GPTLstop("estimate storages");
   }
@@ -902,4 +908,3 @@ static void Init_Forces_noQEq_Hbond(reax_system *system, control_params *control
     // GPTLstop("Compute_Total_Force");
   }
 }
-

@@ -118,6 +118,8 @@ class NPairClusterBinSVE : public NPair {
   ClusterNeighEntry<ATOMONLY> **firstneigh_cluster, *neigh_buffer;
   int *jnum_cluster;
   int firstneigh_alloc;
+  int cluster_stride;
+  bigint cluster_buffer_entries;
 };
 
 }    // namespace LAMMPS_NS

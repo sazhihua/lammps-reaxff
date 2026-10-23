@@ -74,25 +74,15 @@ namespace ReaxFFSVE {
       bonds = (*lists) + BONDS;
       total_bonds = 0;
 
-      /* reset start-end indexes */
+      /* The SVE builder packs accepted bonds contiguously.  Reset empty
+         ranges, rather than reserving slots for every local/ghost atom. */
       for (i = 0; i < system->N; ++i) {
-        Set_Start_Index(i, total_bonds, bonds);
-        Set_End_Index(i, total_bonds, bonds);
-        total_bonds += system->my_atoms[i].num_bonds;
-      }
-
-      /* is reallocation needed? */
-      if (total_bonds >= bonds->num_intrs * DANGER_ZONE) {
-       workspace->realloc.bonds = 1;
-       if (total_bonds >= bonds->num_intrs) {
-         control->error_ptr->one(FLERR,fmt::format("Not enough space for bonds! "
-                                                   "total={} allocated={}\n",
-                                                   total_bonds, bonds->num_intrs));
-       }
+        Set_Start_Index(i, 0, bonds);
+        Set_End_Index(i, 0, bonds);
       }
     }
 
-    if (control->hbond_cut > 0 && system->numH > 0) {
+    if ((*lists + HBONDS)->allocated && control->hbond_cut > 0 && system->numH > 0) {
       hbonds = (*lists) + HBONDS;
       total_hbonds = 0;
 
@@ -127,4 +117,3 @@ namespace ReaxFFSVE {
     Reset_Neighbor_Lists(system, control, workspace, lists);
   }
 }
-
